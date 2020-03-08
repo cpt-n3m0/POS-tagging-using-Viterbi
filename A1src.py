@@ -5,16 +5,10 @@ import sys
 TRAIN = 10000
 TEST = 500
 
-def flatten(sents):
-    return [w for s in sents for w in s]
-
-
 
 sents = brown.tagged_sents(tagset='universal')
 train_sents= sents[:TRAIN]
 test_sents = sents[TRAIN:TRAIN + TEST]
-
-
 
 
 words = []
@@ -22,7 +16,6 @@ tags = []
 total_bigrams = []
 for sentence in train_sents:
     sentence = [('S', 'S')] + sentence + [('E', 'E')]
-
     stags = [t for (_, t) in sentence]
     swords = [w for (w, _) in sentence]
     tags += stags
@@ -44,8 +37,6 @@ print(tag_count['X'])
 #init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
 
 
-
-
 def create_table(x, y):
     tab = []
     for i in range(x):
@@ -56,14 +47,9 @@ def create_table(x, y):
 
 def build_trans(tagset):
     global tag_bi, tag_count
-
     smoothed = {}
-
     for tag in tagset:
-        if tag == 'X':
-            smoothed[tag] = WittenBellProbDist(FreqDist([]), bins=1e5)
-            continue
-        transitions = [t for (o, t) in tag_bi if o == tag]
+        transitions = [t for (o, t) in total_bigrams if o == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(transitions), bins=1e5)
     
     return smoothed
@@ -72,9 +58,6 @@ def build_emis(tagset):
     global wt_count, tag_count, types, words
     smoothed = {}
     for tag in tagset:
-        if tag == 'X':
-            smoothed[tag] = WittenBellProbDist(FreqDist([]), bins=1e5)
-            continue
         ws = [w for (w, t) in words if t == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(ws), bins=1e5)
     
@@ -114,6 +97,7 @@ def viterbi(wseq, tagset=ts, ep = emis, tp = trans):
         bestPOS[i - 1] = tagset[pt]
         lastpoint=pt
 
+    bestPOS[0] = 'S'
     res = [tag for tag in bestPOS]
 #    print(res)
     return res
@@ -127,6 +111,8 @@ def eval(tst_s, tagset=ts):
         ws = [w for (w, _) in s]
         tgs = [t for (_, t) in s]
         ptags = viterbi(ws)
+        #print("AA : " + str(tgs))
+        #print("PP : " + str(ptags))
         for i in range(len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
