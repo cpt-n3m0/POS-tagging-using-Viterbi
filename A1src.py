@@ -8,13 +8,11 @@ TEST = 500
 def flatten(sents):
     return [w for s in sents for w in s]
 
-def get_tag_bigram_freq():
-    tags = bigram([ t for (_, t) in flatten(brown.tagged_sents(tagset='universal'))])
 
 
 sents = brown.tagged_sents(tagset='universal')
 train_sents= sents[:TRAIN]
-test_sents = sents[TRAIN:TEST]
+test_sents = sents[TRAIN:TRAIN + TEST]
 
 flat_sents = flatten(train_sents)
 words = [w for (w, _) in flat_sents]
@@ -27,14 +25,19 @@ types = list(wc.keys())
 
 tag_count = FreqDist(tags)
 ts = list(tag_count.keys())
-tn = sum(list(tag_count.values()))
-
-word_start = [s[0][1] for s in sents]
+tn = len(tags)
+print(ts)
+word_start = [s[0][1] for s in train_sents]
 st_count = FreqDist(word_start)
-init_probs= [st_count[tag]/len(word_start) if tag in list(st_count.keys()) else 0 for tag in ts ]
+init_prob = {}
+init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
 
 
-tag_bi = FreqDist(list(bigrams(tags)))
+total_bigrams = []
+for sentence in train_sents:
+    stags = [t for (_, t) in sentence]
+    total_bigrams += list(bigrams(stags))
+tag_bi = FreqDist(total_bigrams)
 wt_count = FreqDist(flat_sents)
 
 
@@ -49,13 +52,14 @@ def create_table(x, y):
 
 def build_trans(tagset):
     global tag_bi, tag_count
-   # transitions = len(tagset) * [len(tagset) * [0]]
-    transitions = create_table(len(tagset), len(tagset))
-    for i in range(len(tagset)):
-        for j in range(len(tagset)):
-            transitions[i][j] = tag_bi[(tagset[i], tagset[j])]/tag_count[tagset[i]]
+
+    smoothed = {}
+
+    for tag in tagset:
+        transitions = [t for (o, t) in tag_bi if o == tag]
+        smoothed[tag] = WittenBellProbDist(FreqDist(transitions), bins=1e5)
     
-    return transitions
+    return smoothed
 
 def build_emis(tagset):
     global wt_count, tag_count, types, flat_sents
@@ -65,57 +69,73 @@ def build_emis(tagset):
         smoothed[tag] = WittenBellProbDist(FreqDist(words), bins=1e5)
     
 
-    ems = create_table(len(tagset), len(types))
-    for i in range(len(tagset)):
-        for j in range(len(types)):
+    #ems = create_table(len(tagset), len(types))
+    #for i in range(len(tagset)):
+    #    for j in range(len(types)):
 
             #ems[i][j] = (wt_count[(types[j], tagset[i])]/tag_count[tagset[i]])
-            ems[i][j] = smoothed[tagset[i]].prob(types[j])
-    return ems
+           # ems[i][j] = smoothed[tagset[i]].prob(types[j])
+    return smoothed
 
 
 
-
-def words_to_Is(seq):
-    global types
-    return [types.index(w) for w in seq]
-
-
-def pretty_print(l):
-    for r in l :
-        line = ""
-        for c in r:
-            line += str(c) + " "*3
-        print(line)
-
-def viterbi(wseq, tagset):
+def viterbi(wseq, tagset=ts):
     global init_probs  
-    #vitable = len(tagset) * [len(wseq) * [0]]
     vitable = create_table(len(tagset), len(wseq))
-    bookkeep = len(wseq) * [0]
+    backpoints = create_table(len(tagset), len(wseq))
 
     transitions = build_trans(tagset)
     emissions = build_emis(tagset)
 
-    # calculate inital prob
-    wseq_i  = words_to_Is(wseq)
-    print(wseq_i)
     for t in range(len(tagset)):
-        vitable[t][0] = init_probs[t] * emissions[t][wseq_i[0]]
-
+        vitable[t][0] = init_prob['s'].prob(tagset[t]) * emissions[tagset[t]].prob(wseq[0])
     #pretty_print(vitable)
     for i in range(1, len(wseq)):
         for q in range(len(tagset)):
-            candidates = [(vitable[q_prime][i-1] * transitions[q_prime][q] * emissions[q][wseq_i[i]], q_prime) for q_prime in range(len(tagset))]
+            candidates = [(vitable[q_prime][i-1] * transitions[tagset[q_prime]].prob(tagset[q]) * emissions[tagset[q]].prob(wseq[i]), q_prime) for q_prime in range(len(tagset))]
             vitable[q][i] = max(candidates)[0]
-            bookkeep[i - 1] = max(candidates)[1]
+            backpoints[q][i] = max(candidates)[1]
     
-    print(bookkeep)
-    for k in bookkeep:
-        print(tagset[k])
-    pretty_print(vitable)
-    
-viterbi(sys.argv[1].split(" "), ts)
+    lastpoint = max([(vitable[q][len(wseq) - 1], q) for q in range(len(tagset))])[1] 
+    bestPOS = len(wseq) * [0]
+    bestPOS[-1] = tagset[lastpoint]
+    for i in range(len(wseq) - 1, 0, -1):
+        pt = backpoints[lastpoint][i]
+        bestPOS[i - 1] = tagset[pt]
+        lastpoint=pt
+
+    res = [tag for tag in bestPOS]
+#    print(res)
+    return res
+
+def eval(tst_s):
+    correct = 0
+    count = 0
+    for s in tst_s:
+        ws = [w for (w, _) in s]
+
+        tgs = [t for (_, t) in s]
+        ptags = viterbi(ws)
+        print("SENTENCE :" + str(ws))
+        print("ORIGINAL :" + str(tgs))
+        print("PREDICTED :" + str(ptags))
+        for i in range(len(tgs)):
+            count += 1
+            if tgs[i] == ptags[i]:
+                correct +=1
+            #else:
+             #   print(tags[i] + " was falsely predicted as : " + ptags[i])
+    print("prediction rate is :" + str((correct * 100)/count))
+
+
+
+eval(test_sents)
+
+
+
+
+
+#viterbi(sys.argv[1].split(" "), ts)
 
     
 
