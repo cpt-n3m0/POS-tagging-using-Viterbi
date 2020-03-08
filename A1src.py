@@ -14,31 +14,35 @@ sents = brown.tagged_sents(tagset='universal')
 train_sents= sents[:TRAIN]
 test_sents = sents[TRAIN:TRAIN + TEST]
 
-flat_sents = flatten(train_sents)
-words = [w for (w, _) in flat_sents]
-tags = [t for (_, t) in flat_sents]
 
 
 
-wc = FreqDist(words)
-types = list(wc.keys())
+words = []
+tags = []
+total_bigrams = []
+for sentence in train_sents:
+    sentence = [('S', 'S')] + sentence + [('E', 'E')]
+
+    stags = [t for (_, t) in sentence]
+    swords = [w for (w, _) in sentence]
+    tags += stags
+    words += sentence
+    total_bigrams += list(bigrams(stags))
+    
+tag_bi = FreqDist(total_bigrams)
+#wt_count = FreqDist(words)
+#wc = FreqDist(words)
+#types = list(wc.keys())
 
 tag_count = FreqDist(tags)
 ts = list(tag_count.keys())
 tn = len(tags)
-print(ts)
-word_start = [s[0][1] for s in train_sents]
-st_count = FreqDist(word_start)
-init_prob = {}
-init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
+print(tag_count['X'])
+#word_start = [s[0][1] for s in train_sents]
+#st_count = FreqDist(word_start)
+#init_prob = {}
+#init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
 
-
-total_bigrams = []
-for sentence in train_sents:
-    stags = [t for (_, t) in sentence]
-    total_bigrams += list(bigrams(stags))
-tag_bi = FreqDist(total_bigrams)
-wt_count = FreqDist(flat_sents)
 
 
 
@@ -56,17 +60,23 @@ def build_trans(tagset):
     smoothed = {}
 
     for tag in tagset:
+        if tag == 'X':
+            smoothed[tag] = WittenBellProbDist(FreqDist([]), bins=1e5)
+            continue
         transitions = [t for (o, t) in tag_bi if o == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(transitions), bins=1e5)
     
     return smoothed
 
 def build_emis(tagset):
-    global wt_count, tag_count, types, flat_sents
+    global wt_count, tag_count, types, words
     smoothed = {}
     for tag in tagset:
-        words = [w for (w, t) in flat_sents if t == tag]
-        smoothed[tag] = WittenBellProbDist(FreqDist(words), bins=1e5)
+        if tag == 'X':
+            smoothed[tag] = WittenBellProbDist(FreqDist([]), bins=1e5)
+            continue
+        ws = [w for (w, t) in words if t == tag]
+        smoothed[tag] = WittenBellProbDist(FreqDist(ws), bins=1e5)
     
 
     #ems = create_table(len(tagset), len(types))
@@ -78,21 +88,21 @@ def build_emis(tagset):
     return smoothed
 
 
+emis = build_emis(ts)
+trans = build_trans(ts)
 
-def viterbi(wseq, tagset=ts):
+def viterbi(wseq, tagset=ts, ep = emis, tp = trans):
     global init_probs  
     vitable = create_table(len(tagset), len(wseq))
     backpoints = create_table(len(tagset), len(wseq))
 
-    transitions = build_trans(tagset)
-    emissions = build_emis(tagset)
 
     for t in range(len(tagset)):
-        vitable[t][0] = init_prob['s'].prob(tagset[t]) * emissions[tagset[t]].prob(wseq[0])
+        vitable[t][0] = tp['S'].prob(tagset[t]) * ep[tagset[t]].prob(wseq[0])
     #pretty_print(vitable)
     for i in range(1, len(wseq)):
         for q in range(len(tagset)):
-            candidates = [(vitable[q_prime][i-1] * transitions[tagset[q_prime]].prob(tagset[q]) * emissions[tagset[q]].prob(wseq[i]), q_prime) for q_prime in range(len(tagset))]
+            candidates = [(vitable[q_prime][i-1] * tp[tagset[q_prime]].prob(tagset[q]) * ep[tagset[q]].prob(wseq[i]), q_prime) for q_prime in range(len(tagset))]
             vitable[q][i] = max(candidates)[0]
             backpoints[q][i] = max(candidates)[1]
     
@@ -108,23 +118,27 @@ def viterbi(wseq, tagset=ts):
 #    print(res)
     return res
 
-def eval(tst_s):
+def eval(tst_s, tagset=ts):
     correct = 0
     count = 0
+    confusion_matrix = create_table(len(ts), len(ts))
     for s in tst_s:
+        s = [('S', 'S')] + s + [('E', 'E')]
         ws = [w for (w, _) in s]
-
         tgs = [t for (_, t) in s]
         ptags = viterbi(ws)
-        print("SENTENCE :" + str(ws))
-        print("ORIGINAL :" + str(tgs))
-        print("PREDICTED :" + str(ptags))
         for i in range(len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
                 correct +=1
-            #else:
-             #   print(tags[i] + " was falsely predicted as : " + ptags[i])
+            confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
+        
+    print("a\p\t" + "\t".join(ts))
+    for i in range(len(confusion_matrix)):
+        line = ts[i] + "\t"
+        for j in range(len(confusion_matrix)):
+                line += str(confusion_matrix[i][j])+ "\t"
+        print(line)
     print("prediction rate is :" + str((correct * 100)/count))
 
 
