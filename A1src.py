@@ -18,9 +18,7 @@ test_sents = sents[TRAIN:TEST]
 
 flat_sents = flatten(train_sents)
 words = [w for (w, _) in flat_sents]
-tags = set([t for (_, t) in flat_sents])
-
-init_prob = []
+tags = [t for (_, t) in flat_sents]
 
 
 
@@ -30,6 +28,11 @@ types = list(wc.keys())
 tag_count = FreqDist(tags)
 ts = list(tag_count.keys())
 tn = sum(list(tag_count.values()))
+
+word_start = [s[0][1] for s in sents]
+st_count = FreqDist(word_start)
+init_probs= [st_count[tag]/len(word_start) if tag in list(st_count.keys()) else 0 for tag in ts ]
+
 
 tag_bi = FreqDist(list(bigrams(tags)))
 wt_count = FreqDist(flat_sents)
@@ -55,9 +58,9 @@ def build_trans(tagset):
     return transitions
 
 def build_emis(tagset):
-    global wt_count, tag_count, types, tags, flat_sents
+    global wt_count, tag_count, types, flat_sents
     smoothed = {}
-    for tag in tags:
+    for tag in tagset:
         words = [w for (w, t) in flat_sents if t == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(words), bins=1e5)
     
@@ -86,7 +89,7 @@ def pretty_print(l):
         print(line)
 
 def viterbi(wseq, tagset):
-    
+    global init_probs  
     #vitable = len(tagset) * [len(wseq) * [0]]
     vitable = create_table(len(tagset), len(wseq))
     bookkeep = len(wseq) * [0]
@@ -98,22 +101,21 @@ def viterbi(wseq, tagset):
     wseq_i  = words_to_Is(wseq)
     print(wseq_i)
     for t in range(len(tagset)):
-        vitable[t][0] = (tag_count[tagset[t]]/tn) * emissions[t][wseq_i[0]]
+        vitable[t][0] = init_probs[t] * emissions[t][wseq_i[0]]
 
     #pretty_print(vitable)
     for i in range(1, len(wseq)):
         for q in range(len(tagset)):
             candidates = [(vitable[q_prime][i-1] * transitions[q_prime][q] * emissions[q][wseq_i[i]], q_prime) for q_prime in range(len(tagset))]
             vitable[q][i] = max(candidates)[0]
-            #bookkeep[i] = max(zip(candidates, range(len(candidates))))[1]
-            bookkeep[i] = q
+            bookkeep[i - 1] = max(candidates)[1]
     
     print(bookkeep)
     for k in bookkeep:
         print(tagset[k])
     pretty_print(vitable)
     
-viterbi(["I", "ate", "an", "animal"], ts)
+viterbi(sys.argv[1].split(" "), ts)
 
     
 
