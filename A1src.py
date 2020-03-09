@@ -26,7 +26,7 @@ for sentence in train_sents:
     for i in range(len(sentence)):
         word = sentence[i][0]
         #preprocess
-        suffixes = ['ing', 'able', 'ed', 'ly', 'acy', 'ism', 'ness', 'ist', 'ship', 'al', 'ance', 'ty']
+        suffixes = ['ing', 'able', 'ible', 'ed', 'ly', 'dom', 'ism', 'ness', 'ist', 'ship', 'al', 'ance', 'tion', 'sion', 'ise']
         if wc[word] <= RARETHRESH :
             if len(word) > 1 and word[0].isupper() and i > 1:
              #   print(" {} {} {}".format(sentence[i-1][0], sentence[i][0], sentence[i + 1][0]))
@@ -35,14 +35,6 @@ for sentence in train_sents:
             for suf in suffixes:
                 if word.endswith(suf):
                     sentence[i]= ('UNK-' + suf, sentence[i][1])
-            #if word.endswith('ing'):
-            #    sentence[i]= ('UNK-ing', sentence[i][1])
-            #if word.endswith('able'):
-            #    sentence[i]= ('UNK-able', sentence[i][1])
-            #if word.endswith('ed'):
-            #    sentence[i]= ('UNK-ed', sentence[i][1])
-            ##if word.endswith('ly'):
-            #    sentence[i]= ('UNK-ly', sentence[i][1])
  
 
  
@@ -56,26 +48,7 @@ for sentence in train_sents:
     tags += stags
 words = nwords    
 tag_bi = FreqDist(total_bigrams)
-#wt_count = FreqDist(wt_pairs)
-#print(wt_pairs)
-#types = list(wc.keys())
-#def preprocess():
-#    global words, wt_pairs
-#    for i in range(len(wt_pairs)):
-#        w = wt_pairs[i][0]
-#        if wc[w] < 3 and w[-3:] == 'ing':
-#            words = ['UNK-ing' if wd == w else wd for wd in words]
-#            wt_pairs[i] = ('UNK-ing', wt_pairs[i][1])
-#    nouns = []
-#    for i in range(len(words)):
-#        if len(words[i]) > 1 and words[i][0].isupper() and words[i - 1] != 'S':
-#            nouns.append(words[i])
-#            words[i] = 'N-UNK'
-    #wt_pairs = [('N-UNK', t) if wd in nouns else (wd,t) for (wd,t) in wt_pairs]
-
             
-        
-#preprocess() 
 
 wc = FreqDist(words)
 print(wc['UNK-ing'])
@@ -147,24 +120,20 @@ def eval(tst_s, tagset=ts):
     confusion_matrix = create_table(len(ts), len(ts))
     for s in tst_s:
         s =[('S', 'S')]+ s + [('E', 'E')]
+        
         for i in range(len(s)):
-            if len(s[i][0]) > 1 and s[i][0] not in words and s[i][0][0].isupper() and i > 1:
-                #print(" {} {} {}".format(s[i-1][0], s[i][0], s[i + 1][0]))
+            w = s[i][0]
+            if len(w) > 1 and w not in words and w[0].isupper() and i > 1:
                 s[i] = ('N-UNK', s[i][1])
-        for suf in suffixes:
-             s = [('UNK-' + suf,t) if w not in words  and w.endswith(suf) else (w,t) for (w,t) in s]
-  #      s = [('UNK-ing',t) if w not in words  and w.endswith('ing') else (w,t) for (w,t) in s]
-  #      s = [('UNK-able',t) if w not in words  and w.endswith('able') else (w,t) for (w,t) in s]
-  #      s = [('UNK-ed',t) if w not in words  and w.endswith('ed') else (w,t) for (w,t) in s]
-  #      s = [('UNK-ly',t) if w not in words  and w.endswith('ly') else (w,t) for (w,t) in s]
+            if w not in words:
+                for suf in suffixes:
+                    if w.endswith(suf):
+                        s[i] = ("UNK-" + suf, s[i][1])
         
         ws = [w for (w, _) in s]
         tgs = [t for (_, t) in s]
         
         ptags = viterbi(ws)
-       # print(ws)
-       # print("OO : " + str(tgs)) 
-       # print("PP : " + str(ptags)) 
         for i in range( len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
