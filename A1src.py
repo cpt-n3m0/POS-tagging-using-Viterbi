@@ -91,8 +91,8 @@ trans = build_trans(ts)
 def viterbi(wseq, tagset=ts, ep = emis, tp = trans):
     global init_probs  
     vitable = create_table(len(tagset), len(wseq))
-    backpoints = create_table(len(tagset), len(wseq))
-
+   # backpoints = create_table(len(tagset), len(wseq))
+    tseq = len(wseq) * [0]
 
     for t in range(len(tagset)):
         vitable[t][0] = tp['S'].prob(tagset[t]) * ep[tagset[t]].prob(wseq[0])
@@ -101,19 +101,19 @@ def viterbi(wseq, tagset=ts, ep = emis, tp = trans):
         for q in range(len(tagset)):
             candidates = [(vitable[q_prime][i-1] * tp[tagset[q_prime]].prob(tagset[q]) * ep[tagset[q]].prob(wseq[i]), q_prime) for q_prime in range(len(tagset))]
             vitable[q][i] = max(candidates)[0]
-            backpoints[q][i] = max(candidates)[1]
-    
-    lastpoint = max([(vitable[q][len(wseq) - 1], q) for q in range(len(tagset))])[1] 
-    bestPOS = len(wseq) * [0]
-    bestPOS[-1] = tagset[lastpoint]
-    for i in range(len(wseq) - 1, 0, -1):
-        pt = backpoints[lastpoint][i]
-        bestPOS[i - 1] = tagset[pt]
-        lastpoint=pt
-
-    bestPOS[0] = 'S'
-    return bestPOS
-
+            #backpoints[q][i] = max(candidates)[1]
+            tseq[i - 1] = tagset[max(candidates)[1]]
+    #lastpoint = max([(vitable[q][len(wseq) - 1], q) for q in range(len(tagset))])[1] 
+    #bestPOS = len(wseq) * [0]
+    #bestPOS[-1] = tagset[lastpoint]
+   # for i in range(len(wseq) - 1, 0, -1):
+    #    pt = backpoints[lastpoint][i]
+    #    bestPOS[i - 1] = tagset[pt]
+    #    lastpoint=pt
+    tseq[-1] == tagset[max([(vittable[q][len(wseq) - 1], q) for q in range(len(tagset))])[1]]
+    #bestPOS[0] = 'S'
+    #return bestPOS
+    return tseq
 def eval(tst_s, tagset=ts):
     correct = 0
     count = 0
@@ -134,6 +134,8 @@ def eval(tst_s, tagset=ts):
         tgs = [t for (_, t) in s]
         
         ptags = viterbi(ws)
+        print(tgs)
+        print(ptags)
         for i in range( len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
