@@ -71,51 +71,13 @@ def viterbi(wseq, tagset, ep , tp ):
 
     return bestPOS
 
-def eval(tst_s, tagset, ep , tp):
-    correct = 0
-    count = 0
-    confusion_matrix = create_table(len(ts), len(ts))
-    for s in tst_s:
-        s =[('S', 'S')]+ s + [('E', 'E')]
-        
-        for i in range(len(s)):
-            w = s[i][0]
-            if len(w) > 1 and w not in words and w[0].isupper() and i > 1:
-                s[i] = ('N-UNK', s[i][1])
-            if w not in words:
-                for suf in suffixes:
-                    if w.endswith(suf):
-                        s[i] = ("UNK-" + suf, s[i][1])
-        
-        ws = [w for (w, _) in s]
-        tgs = [t for (_, t) in s]
-        
-        ptags = viterbi(ws, tagset, ep, tp)
-        for i in range(len(tgs)):
-            count += 1
-            if tgs[i] == ptags[i]:
-                correct +=1
-
-            confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
-
-    #print stats
-    print("a\p\t" + "\t".join(ts))
-    for i in range(len(confusion_matrix)):
-        line = ts[i] + "\t"
-        for j in range(len(confusion_matrix)):
-                line += str(confusion_matrix[i][j])+ "\t"
-        print(line)
-    print("prediction rate is :" + str((correct * 100)/count))
-
-
 
 def train(train_sents):
     if PREPROCESS:
         # initial counts for preprocessing use
         words = [w for s in train_sents for (w, _) in s]
         wc = FreqDist(words)
-
-    if VERBOSE: print("Training Start... ")
+        type_count = len(wc.keys())
     train_duration = time.time()
     pp_duration = 0
  
@@ -128,7 +90,7 @@ def train(train_sents):
     for sentence in train_sents:
         sentence = [('S', 'S')] + sentence + [('E', 'E')]
         stags = []
-        print("Training progress: %d%% \r" % (counter * 100/len(train_sents)), end='', flush=True))
+        print("Training progress: %d%% \r" % (counter * 100/len(train_sents) + 1), end='', flush=True)
         counter+= 1
         for i in range(len(sentence)):
             if PREPROCESS:
@@ -151,31 +113,96 @@ def train(train_sents):
         tags += stags
     words = nwords    
     wc = FreqDist(words)
-
+    print("")
     tag_bi_count = FreqDist(total_bigrams)            
     tag_count = FreqDist(tags)
     ts = list(tag_count.keys())
 
-    if VERBOSE:
-        print("Training complete.")
-        # tag stats
-        print("Tags occurences :")
-        for t in tag_count:
-            print("{} {}".format(t, str(tag_count[t])))
-        
     train_duration = time.time() - train_duration
+    if VERBOSE:
+        # tag stats
+        print("* Training lasted:\t" + str(train_duration) + "ms")
+        print("* Preprocessing lasted:\t{}ms ({}%)".format(str(pp_duration), str(int(pp_duration * 100/train_duration))))
+        print("* Tags occurences :")
+        for t in tag_count:
+            if t in ['S', 'E']:
+                continue
+            print("{}\t{}".format(t, str(tag_count[t])))
+        print("* Type count : " + str(type_count))
+        
     return wt_pairs, words, wc, tags, total_bigrams, tag_bi_count, ts
+
+def eval(tst_s, tagset, ep , tp):
+    if VERBOSE: print("\nStaring Testing ...")
+    correct = 0
+    count = 0
+    confusion_matrix = create_table(len(ts), len(ts))
+    
+    counter = 0
+    unks = {}
+    for s in tst_s:
+        
+        print("Testing progress: %d%% \r" % (counter * 100/len(tst_s) + 1), end='', flush=True)
+        counter += 1
+        s =[('S', 'S')]+ s + [('E', 'E')]
+        
+        for i in range(len(s)):
+            w = s[i][0]
+            if len(w) > 1 and w not in words and w[0].isupper() and i > 1:
+                s[i] = ('N-UNK', s[i][1])
+            if w not in words:
+                for suf in suffixes:
+                    if w.endswith(suf):
+                        s[i] = ("UNK-" + suf, s[i][1])
+                        try:
+                            unks[suf] += 1
+                        except:
+                            unks[suf] = 0
+
+        
+        ws = [w for (w, _) in s]
+        tgs = [t for (_, t) in s]
+        
+        ptags = viterbi(ws, tagset, ep, tp)
+        for i in range(len(tgs)):
+            count += 1
+            if tgs[i] == ptags[i]:
+                correct +=1
+
+            confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
+    print("")
+    #print stats
+    
+    if VERBOSE:
+        ntwords= [w for s in train_sents for (w, _) in s]
+        ntwc = FreqDist(ntwords)
+        print("* Test type count:\t" + str(len(ntwc.keys())))
+        print("* UNK occurences (% of total words)")
+        for unk in unks:
+            print("{}\t{} ({}%)".format(unk, str(unks[unk]), str(unks[unk] * 100/ntwords)))
+        print("")
+
+    print("-" * 48 + "Confusion Matrix" + '-' * 48)
+    print("a\p\t" + "\t".join(ts))
+    for i in range(len(confusion_matrix)):
+        line = ts[i] + "\t"
+        for j in range(len(confusion_matrix)):
+                line += str(confusion_matrix[i][j])+ "\t"
+        print(line)
+    print("Accuracy rate is :" + str((correct * 100)/count))
+
 
 
 
 def setFlags(cmd):
+    global PREPROCESS, PP_CAP, PP_SUF, VERBOSE
     if "-pp" in cmd:
         PREPROCESS = False
     if '-cpp' in cmd:
         PP_CAP = False
-    if '-sufpp':
+    if '-sufpp' in cmd:
         PP_SUF = False
-    if '-v':
+    if '-v' in cmd:
         VERBOSE = True
 
 if __name__ == '__main__':
