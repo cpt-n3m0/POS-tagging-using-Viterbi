@@ -73,11 +73,12 @@ def viterbi(wseq, tagset, ep , tp ):
 
 
 def train(train_sents):
-    if PREPROCESS:
-        # initial counts for preprocessing use
-        words = [w for s in train_sents for (w, _) in s]
-        wc = FreqDist(words)
-        type_count = len(wc.keys())
+    # initial count (before preprocessing)
+    words = [w for s in train_sents for (w, _) in s]
+    wc = FreqDist(words)
+    type_count = len(wc.keys())
+
+
     train_duration = time.time()
     pp_duration = 0
  
@@ -98,11 +99,13 @@ def train(train_sents):
                 word = sentence[i][0]
                 #preprocess
                 if wc[word] <= RARETHRESH :
-                    if len(word) > 1 and word[0].isupper() and i > 1:
-                        sentence[i]= ('N-UNK', sentence[i][1])
-                    for suf in suffixes:
-                        if word.endswith(suf):
-                            sentence[i]= ('UNK-' + suf, sentence[i][1])
+                    if PP_CAP:
+                        if len(word) > 1 and word[0].isupper() and i > 1:
+                            sentence[i]= ('N-UNK', sentence[i][1])
+                    if PP_SUF:
+                        for suf in suffixes:
+                            if word.endswith(suf):
+                                sentence[i]= ('UNK-' + suf, sentence[i][1])
                 pp_duration += time.time() - start
             stags += [sentence[i][1]]
             nwords += [sentence[i][0]]
@@ -128,11 +131,12 @@ def train(train_sents):
             if t in ['S', 'E']:
                 continue
             print("{}\t{}".format(t, str(tag_count[t])))
-        print("* Type count : " + str(type_count))
+        print("* Type count :\t" + str(type_count))
+        print("* Token Count:\t" + str(len(words)))
         
     return wt_pairs, words, wc, tags, total_bigrams, tag_bi_count, ts
 
-def eval(tst_s, tagset, ep , tp):
+def eval(tst_s, tagset, ep , tp, wds):
     if VERBOSE: print("\nStaring Testing ...")
     correct = 0
     count = 0
@@ -148,9 +152,9 @@ def eval(tst_s, tagset, ep , tp):
         
         for i in range(len(s)):
             w = s[i][0]
-            if len(w) > 1 and w not in words and w[0].isupper() and i > 1:
+            if len(w) > 1 and w not in wds and w[0].isupper() and i > 1:
                 s[i] = ('N-UNK', s[i][1])
-            if w not in words:
+            if w not in wds:
                 for suf in suffixes:
                     if w.endswith(suf):
                         s[i] = ("UNK-" + suf, s[i][1])
@@ -179,7 +183,7 @@ def eval(tst_s, tagset, ep , tp):
         print("* Test type count:\t" + str(len(ntwc.keys())))
         print("* UNK occurences (% of total words)")
         for unk in unks:
-            print("{}\t{} ({}%)".format(unk, str(unks[unk]), str(unks[unk] * 100/ntwords)))
+            print("{}\t{} ({}%)".format(unk, str(unks[unk]), str(unks[unk] * 100/len(ntwords))))
         print("")
 
     print("-" * 48 + "Confusion Matrix" + '-' * 48)
@@ -211,12 +215,12 @@ if __name__ == '__main__':
     train_sents= sents[:TRAIN]
     test_sents = sents[TRAIN:TRAIN + TEST]
     
-    wt_pairs, words, wc, tags, tbigrams, tag_bi_count, ts = train(train_sents)
+    wt_pairs, wds, wc, tags, tbigrams, tag_bi_count, ts = train(train_sents)
     
     eps = build_emis(ts, wt_pairs)
     tps = build_trans(ts, tbigrams)
     
-    eval(test_sents, ts, eps, tps)
+    eval(test_sents, ts, eps, tps, wds )
 
 
     
