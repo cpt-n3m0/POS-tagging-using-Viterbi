@@ -1,7 +1,7 @@
 from nltk.corpus import brown
 from nltk import FreqDist, WittenBellProbDist, bigrams
 import sys
-import re
+
 TRAIN = 10000
 TEST = 500
 
@@ -11,62 +11,30 @@ train_sents= sents[:TRAIN]
 test_sents = sents[TRAIN:TRAIN + TEST]
 
 
-words = [w for s in sents for (w, _) in s]
-
-wc = FreqDist(words)
+words = []
 tags = []
 total_bigrams = []
-wt_pairs = []
-
-nwords= []
 for sentence in train_sents:
     sentence = [('S', 'S')] + sentence + [('E', 'E')]
-    stags = []
-    for i in range(len(sentence)):
-        word = sentence[i][0]
-        # preprocess
-        if wc[word] < 2 and word.endswith('able'):
-            sentence[i]= ('UNK-able', sentence[i][1])
-        stags += [sentence[i][1]]
-        nwords += [sentence[i][0]]
-        wt_pairs += [sentence[i]]
-
-    
-    total_bigrams += list(bigrams(stags))
+    stags = [t for (_, t) in sentence]
+    swords = [w for (w, _) in sentence]
     tags += stags
-words = nwords    
+    words += sentence
+    total_bigrams += list(bigrams(stags))
+    
 tag_bi = FreqDist(total_bigrams)
-#wt_count = FreqDist(wt_pairs)
-#print(wt_pairs)
+#wt_count = FreqDist(words)
+#wc = FreqDist(words)
 #types = list(wc.keys())
-#def preprocess():
-#    global words, wt_pairs
-#    for i in range(len(wt_pairs)):
-#        w = wt_pairs[i][0]
-#        if wc[w] < 3 and w[-3:] == 'ing':
-#            words = ['UNK-ing' if wd == w else wd for wd in words]
-#            wt_pairs[i] = ('UNK-ing', wt_pairs[i][1])
-#    nouns = []
-#    for i in range(len(words)):
-#        if len(words[i]) > 1 and words[i][0].isupper() and words[i - 1] != 'S':
-#            nouns.append(words[i])
-#            words[i] = 'N-UNK'
-    #wt_pairs = [('N-UNK', t) if wd in nouns else (wd,t) for (wd,t) in wt_pairs]
 
-            
-        
-#preprocess() 
-
-wc = FreqDist(words)
-print(wc['UNK-ing'])
 tag_count = FreqDist(tags)
 ts = list(tag_count.keys())
 tn = len(tags)
+print(tag_count['X'])
 #word_start = [s[0][1] for s in train_sents]
 #st_count = FreqDist(word_start)
 #init_prob = {}
 #init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
-
 
 
 def create_table(x, y):
@@ -87,10 +55,10 @@ def build_trans(tagset):
     return smoothed
 
 def build_emis(tagset):
-    global wt_count, tag_count, types, wt_pairs
+    global wt_count, tag_count, types, words
     smoothed = {}
     for tag in tagset:
-        ws = [w for (w, t) in wt_pairs if t == tag]
+        ws = [w for (w, t) in words if t == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(ws), bins=1e5)
     
 
@@ -137,37 +105,19 @@ def eval(tst_s, tagset=ts):
     correct = 0
     count = 0
     confusion_matrix = create_table(len(ts), len(ts))
-   # nouns = []
     for s in tst_s:
-       # for i in range(len(s)):
-       #     if len(s[i][0]) > 1 and s[i][0][0].isupper() and i != 0:
-       #         nouns.append(s[i][0])
-       #         s[i] = ('N-UNK', s[i][1])
-        s = [('UNK-able',t) if w not in words and w.endswith('ing') else (w,t) for (w,t) in s]
-        
-      #  s = [('NUNK',t) if w not in words and w[-3:] =='ing' else (w,t) for (w,t) in s]
         s = s + [('E', 'E')]
         ws = [w for (w, _) in s]
         tgs = [t for (_, t) in s]
-        
-       # print([(w, t) for (w, t) in s if w not in list(wc.keys())])
         ptags = viterbi(ws)
-       # print(ws)
-       # print("OO : " + str(tgs)) 
-       # print("PP : " + str(ptags)) 
+        #print("AA : " + str(tgs))
+        #print("PP : " + str(ptags))
         for i in range(1, len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
                 correct +=1
-            elif ws[i] == 'UNK-ing':
-                print(tgs[i] + " and not " + ptags[i])
-
             confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
-
         
-    #print(nouns)
-    #print(len(nouns))
-    # print stats    
     print("a\p\t" + "\t".join(ts))
     for i in range(len(confusion_matrix)):
         line = ts[i] + "\t"
