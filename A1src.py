@@ -4,29 +4,49 @@ import sys
 import re
 TRAIN = 10000
 TEST = 500
-
+RARETHRESH = 1
 
 sents = brown.tagged_sents(tagset='universal')
 train_sents= sents[:TRAIN]
 test_sents = sents[TRAIN:TRAIN + TEST]
 
-
-words = [w for s in sents for (w, _) in s]
-
+# initial counts for preprocessing use
+words = [w for s in train_sents for (w, _) in s]
 wc = FreqDist(words)
+
+
 tags = []
 total_bigrams = []
 wt_pairs = []
+nwords= [] #processed words
 
-nwords= []
 for sentence in train_sents:
     sentence = [('S', 'S')] + sentence + [('E', 'E')]
     stags = []
     for i in range(len(sentence)):
         word = sentence[i][0]
-        # preprocess
-        if wc[word] < 2 and word.endswith('able'):
-            sentence[i]= ('UNK-able', sentence[i][1])
+        #preprocess
+        suffixes = ['ing', 'able', 'ed', 'ly', 'acy', 'ism', 'ness', 'ist', 'ship', 'al', 'ance', 'ty']
+        if wc[word] <= RARETHRESH :
+            if len(word) > 1 and word[0].isupper() and i > 1:
+             #   print(" {} {} {}".format(sentence[i-1][0], sentence[i][0], sentence[i + 1][0]))
+             #   print(i)
+                sentence[i]= ('N-UNK', sentence[i][1])
+            for suf in suffixes:
+                if word.endswith(suf):
+                    sentence[i]= ('UNK-' + suf, sentence[i][1])
+            #if word.endswith('ing'):
+            #    sentence[i]= ('UNK-ing', sentence[i][1])
+            #if word.endswith('able'):
+            #    sentence[i]= ('UNK-able', sentence[i][1])
+            #if word.endswith('ed'):
+            #    sentence[i]= ('UNK-ed', sentence[i][1])
+            ##if word.endswith('ly'):
+            #    sentence[i]= ('UNK-ly', sentence[i][1])
+ 
+
+ 
+ 
         stags += [sentence[i][1]]
         nwords += [sentence[i][0]]
         wt_pairs += [sentence[i]]
@@ -62,10 +82,6 @@ print(wc['UNK-ing'])
 tag_count = FreqDist(tags)
 ts = list(tag_count.keys())
 tn = len(tags)
-#word_start = [s[0][1] for s in train_sents]
-#st_count = FreqDist(word_start)
-#init_prob = {}
-#init_prob['s'] = WittenBellProbDist(FreqDist(word_start), bins=1e5)
 
 
 
@@ -93,13 +109,6 @@ def build_emis(tagset):
         ws = [w for (w, t) in wt_pairs if t == tag]
         smoothed[tag] = WittenBellProbDist(FreqDist(ws), bins=1e5)
     
-
-    #ems = create_table(len(tagset), len(types))
-    #for i in range(len(tagset)):
-    #    for j in range(len(types)):
-
-            #ems[i][j] = (wt_count[(types[j], tagset[i])]/tag_count[tagset[i]])
-           # ems[i][j] = smoothed[tagset[i]].prob(types[j])
     return smoothed
 
 
@@ -129,45 +138,41 @@ def viterbi(wseq, tagset=ts, ep = emis, tp = trans):
         bestPOS[i - 1] = tagset[pt]
         lastpoint=pt
 
-    res = [tag for tag in bestPOS]
-#    print(res)
-    return res
+    bestPOS[0] = 'S'
+    return bestPOS
 
 def eval(tst_s, tagset=ts):
     correct = 0
     count = 0
     confusion_matrix = create_table(len(ts), len(ts))
-   # nouns = []
     for s in tst_s:
-       # for i in range(len(s)):
-       #     if len(s[i][0]) > 1 and s[i][0][0].isupper() and i != 0:
-       #         nouns.append(s[i][0])
-       #         s[i] = ('N-UNK', s[i][1])
-        s = [('UNK-able',t) if w not in words and w.endswith('ing') else (w,t) for (w,t) in s]
+        s =[('S', 'S')]+ s + [('E', 'E')]
+        for i in range(len(s)):
+            if len(s[i][0]) > 1 and s[i][0] not in words and s[i][0][0].isupper() and i > 1:
+                #print(" {} {} {}".format(s[i-1][0], s[i][0], s[i + 1][0]))
+                s[i] = ('N-UNK', s[i][1])
+        for suf in suffixes:
+             s = [('UNK-' + suf,t) if w not in words  and w.endswith(suf) else (w,t) for (w,t) in s]
+  #      s = [('UNK-ing',t) if w not in words  and w.endswith('ing') else (w,t) for (w,t) in s]
+  #      s = [('UNK-able',t) if w not in words  and w.endswith('able') else (w,t) for (w,t) in s]
+  #      s = [('UNK-ed',t) if w not in words  and w.endswith('ed') else (w,t) for (w,t) in s]
+  #      s = [('UNK-ly',t) if w not in words  and w.endswith('ly') else (w,t) for (w,t) in s]
         
-      #  s = [('NUNK',t) if w not in words and w[-3:] =='ing' else (w,t) for (w,t) in s]
-        s = s + [('E', 'E')]
         ws = [w for (w, _) in s]
         tgs = [t for (_, t) in s]
         
-       # print([(w, t) for (w, t) in s if w not in list(wc.keys())])
         ptags = viterbi(ws)
        # print(ws)
        # print("OO : " + str(tgs)) 
        # print("PP : " + str(ptags)) 
-        for i in range(1, len(tgs)):
+        for i in range( len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
                 correct +=1
-            elif ws[i] == 'UNK-ing':
-                print(tgs[i] + " and not " + ptags[i])
 
             confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
 
-        
-    #print(nouns)
-    #print(len(nouns))
-    # print stats    
+    #print stats
     print("a\p\t" + "\t".join(ts))
     for i in range(len(confusion_matrix)):
         line = ts[i] + "\t"
