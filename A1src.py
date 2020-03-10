@@ -12,7 +12,7 @@ RARETHRESH = 1
 PREPROCESS = True
 PP_CAP = True
 PP_SUF = True
-suffixes = ['ing', 'able', 'ible', 'ed', 'ly', 'dom', 'ism', 'ness', 'ist', 'ship', 'al', 'ance', 'tion', 'sion', 'ise']
+suffixes = ['ing', 'able', 'ible', 'ed', 'ly', 'dom', 'ism', 'ness', 'ship', 'al', 'tion', 'ise']
 
 VERBOSE = False
 
@@ -178,12 +178,12 @@ def train(train_sents):
         #plt.title("Word frequency distribution")
         #plt.savefig("wordfreq.png", dpi=400)
         
-        
     return wt_pairs, words, types, wc, tags, total_bigrams, ts
 
 def eval(tst_s, tagset, ep , tp, wds):
     if VERBOSE: print("\nStarting Testing ...")
     correct = 0
+    false = 0
     count = 0
     confusion_matrix = create_table(len(ts), len(ts))
     
@@ -216,14 +216,16 @@ def eval(tst_s, tagset, ep , tp, wds):
         for i in range(len(tgs)):
             count += 1
             if tgs[i] == ptags[i]:
-                correct +=1
+                correct += 1
+            else:
+                false += 1
 
             confusion_matrix[ts.index(tgs[i])][ts.index(ptags[i])] += 1
     print("")
     #print stats
     
     if VERBOSE:
-        ntwords= [w for s in train_sents for (w, _) in s]
+        ntwords= [w for s in test_sents for (w, _) in s]
         ntwc = FreqDist(ntwords)
         print("* Test type count:\t" + str(len(ntwc.keys())))
         print("* Test token count:\t" + str(len(ntwords)))
@@ -232,14 +234,26 @@ def eval(tst_s, tagset, ep , tp, wds):
             print("{}\t{} ({}%)".format(unk, str(unks[unk]), str(unks[unk] * 100/len(ntwords))))
         print("")
 
-    #print("-" * 48 + "Confusion Matrix" + '-' * 48)
-    #print("a\p\t" + "\t".join(ts))
-    #for i in range(len(confusion_matrix)):
-    #    line = ts[i] + "\t"
-    #    for j in range(len(confusion_matrix)):
-    #            line += str(confusion_matrix[i][j])+ "\t"
-    #    print(line)
-    print("Accuracy rate is :" + str((correct * 100)/count))
+   # maxval = max([max(l) for l in confusion_matrix])
+   # confusion_matrix = [[v/maxval for v in l] for l in confusion_matrix]
+   # fig, ax = plt.subplots()
+   # im = ax.imshow(confusion_matrix, cmap='Reds', vmin=0.05)
+   # ax.set_xticks(range(len(ts)))
+   # ax.set_yticks(range(len(ts)))
+   # ax.set_xticklabels(ts)
+   # ax.set_yticklabels(ts)
+   # plt.setp(ax.get_xticklabels(), rotation=45, rotation_mode='anchor')
+   # ax.set_title("Confusion Matrix Heatmap")
+   # fig.tight_layout()
+   # plt.show()
+    print("-" * 48 + "Confusion Matrix" + '-' * 48)
+    print("a\p\t" + "\t".join(ts))
+    for i in range(len(confusion_matrix)):
+        line = ts[i] + "\t"
+        for j in range(len(confusion_matrix)):
+                line += str(confusion_matrix[i][j])+ "\t"
+        print(line)
+    print("Recall :" + str((correct * 100)/count))
 
 
 
@@ -261,42 +275,45 @@ if __name__ == '__main__':
     train_sents= sents[:TRAIN]
     test_sents = sents[TRAIN:TRAIN + TEST]
     
-    allsuffixes = [ 'ing', 'able', 'ible', 'ed', 'ly', 'dom', 'ism', 'ness', 'ist', 'ship', 'al', 'ance', 'tion', 'sion', 'ise']
-    for s in allsuffixes:
-        suffixes=[s]
-        wt_pairs, wds, types, wc, tags, tbigrams, ts = train(train_sents)
-        eps = build_emis(ts, wt_pairs)
-        tps = build_trans(ts, tbigrams)
-        print("evaluating " + s)
-        eval(test_sents, ts, eps, tps, wds )
+    wt_pairs, wds, types, wc, tags, tbigrams, ts = train(train_sents)
+    eps = build_emis(ts, wt_pairs)
+    tps = build_trans(ts, tbigrams)
+
+
+    eval(test_sents, ts, eps, tps, wds )
     
 
-    if VERBOSE:
+#    if VERBOSE:
         #ns_tps = build_trans_nosmooth(ts, tbigrams, tags)
         #ns_eps = build_emis_nosmooth(ts, wt_pairs, types, tags)
-        print("-" * 48 + "Transition Probs" + '-' * 48) 
-        print("\t" + "\t".join(ts))
-        for i in range(len(ts)):
-            line = " " + ts[i] + "\t"
-            for j in range(len(ts)):
-                    line += str("%.5f" % tps[ts[i]].prob(ts[j]))+ "\t"
-            print(line)
-        # Non smoothed transition probs
 
+        ### Non smoothed emission probs
+        #print("-" * 48 + "Transition Probs" + '-' * 48) 
+        #print("\t" + "\t".join(ts))
+        #for i in range(len(ts)):
+        #    line = " " + ts[i] + "\t"
+        #    for j in range(len(ts)):
+        #            line += str("%.5f" % tps[ts[i]].prob(ts[j]))+ "\t"
+        #    print(line)
+
+        ### Non smoothed transition probs
         #print("-" * 48 + "No smoothing Transition Probs" + '-' * 48) 
         #print("\t" + "\t".join(ts))
         #for i in range(len(ts)):
         #    line = " " + ts[i] + "\t"
         #    for j in range(len(ts)):
         #            line += str("%.5f" % ns_tps[i][j])+ "\t"
+ 
+        ### Emission probs
         #    print(line)
-        print("-" * 30+ "Emission Probs" + '-' * 30)
-        print("\t" + "\t".join(wds[:9]))
-        for i in range(len(ts)):
-            line = " " + ts[i] + "\t"
-            for j in range(len(wds[:9])):
-                    line += str("%.5f" % eps[ts[i]].prob(wds[j]))+ "\t"
-            print(line)
+        #print("-" * 30+ "Emission Probs" + '-' * 30)
+        #print("\t" + "\t".join(wds[:9]))
+        #for i in range(len(ts)):
+        #    line = " " + ts[i] + "\t"
+        #    for j in range(len(wds[:9])):
+        #            line += str("%.5f" % eps[ts[i]].prob(wds[j]))+ "\t"
+        ### Non smoothed emission probs
+        #    print(line)
         #print("-" * 30 + "no smoothing Emission Probs" + '-' * 30)
         #print("\t" + "\t".join(wds[:9]))
         #for i in range(len(ts)):
